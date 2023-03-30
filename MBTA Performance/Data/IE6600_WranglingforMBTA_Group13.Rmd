@@ -1,0 +1,107 @@
+---
+title: "HW 4_IE6600_Sec03_Group13"
+author: "Vincenzo Coppola, Ashish Sharma, Akshay Dwivedi"
+date: "2/15/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "C:/Users/BigV24/Desktop/IE6600/Projects/MBTA Performance")
+```
+
+```{r Libraries, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(corrplot)
+library(treemapify)
+library(RColorBrewer)
+library(ggalluvial)
+library(ggfittext)
+library(ggrepel)
+library(scales)
+```
+
+```{r Data, include=FALSE}
+df_satisfaction <- read.csv('MBTA_Service_Customer_Satisfaction.csv', na.strings="")
+df_gatedentry <- read.csv('MBTA_Gated_Station_Entries.csv', na.strings="")
+```
+
+# Problem statement
+In this assignment, we, as a group are utilizing our ever-developing  knowledge of advanced analytics and visualizations in R. Through the below 6 tasks, we demonstrate that we understand how to take in data and manipulate it down to be able and create meaningful visualizations. We use a combination of pipelines and ggplot functions to filter and select data and present it with various types of plots.
+
+```{r Task 1, include=TRUE} 
+# Code to generate second half of 2015 only. Not used.
+df_crime_half15 <- df_crime15 %>% 
+  filter(MONTH>6)
+
+df_15and16 <- bind_rows(df_crime15,df_crime16)
+df_15thru17 <- bind_rows(df_15and16,df_crime17)
+df_15thru18 <- df_15thru17 %>% 
+  bind_rows(df_15thru17,df_crime18) %>% 
+  transform(SHOOTING = as.integer(SHOOTING)) %>% 
+  drop_na()
+df_15thru19 <- bind_rows(df_15thru18,df_crime19)
+df_15thru20 <- bind_rows(df_15thru19,df_crime20)
+df_15thru21 <- bind_rows(df_15thru20,df_crime21)
+
+df_final <- df_15thru21 %>%
+  filter(DISTRICT != 'External') %>% 
+  group_by(DISTRICT,MONTH) %>% 
+  summarise('Total_count'=n(),.groups='drop') %>% 
+  drop_na()
+  
+write.csv(df_final,"df_for_flourish.csv", row.names = FALSE)
+```
+
+### Output 1
+The first output shows the total delay density of each delay type for the airlines dataset. The data for the different delays could be pivoted and grouped by those delay types in a pipeline to retrieve the necessary values to be plotted. Finally using ggplot the retrieved data was able to be plotted cleanly after first transforming the delay (x-scale) to be logarithmic and adjusting all labels resulting in the shown density plot. 
+
+```{r Task 2, include=TRUE}
+df_sat_split <- df_satisfaction %>% 
+  separate(ï..survey_date, c('date','time'), sep = " ")
+df_sat_split
+monthly_only <- month(ymd(df_sat_split$date))
+yearly_only <- year(ymd(df_sat_split$date))
+df_satisfaction$MONTH <- monthly_only
+df_satisfaction$YEAR <- yearly_only
+st='%'
+df_grouped <- df_satisfaction %>% 
+  group_by(question_description,YEAR) %>% 
+  summarise(Extremely_dissatisfied = mean(response_1_percent), Very_dissatisfied = mean(response_2_percent), Somewhat_dissatisfied = mean(response_3_percent), Neutral = mean(response_4_percent), Somewhat_satisfied = mean(response_5_percent), Very_satisfied = mean(response_6_percent), Extremely_satisfied= mean(response_7_percent),.groups='drop') %>% pivot_longer(c(Extremely_dissatisfied:Extremely_satisfied),names_to = "responses",values_to = 'percentages')
+
+df_grouped$percentages <- label_percent()(df_grouped$percentages)
+
+
+df_grouped
+write.csv(df_grouped,"df_sat_flourish.csv", row.names = FALSE)
+```
+
+### Output 2
+In the second task, corrplot was used to visualize the correlation between all delay types. By transforming the selected columns of the airline data into a matrix and ordering the matrix corrplot.mixed() could be used to visualize the correlation with two different methods - area circles, and numeric values. The resulting correlation matrix shown in the output is the visualization from relating the delay types to each other with a 0-1 range for numbers and circle size where an increase is increase in correlation.
+
+```{r Task 3, include = TRUE}
+colnames(df_gatedentry)
+df_entry_split <- df_gatedentry %>% 
+  separate(ï..service_date, c('date','time'), sep = " ")
+head(df_entry_split)
+monthly_only2 <- month(ymd(df_entry_split$date))
+yearly_only2 <- year(ymd(df_entry_split$date))
+df_entry_split$MONTH <- monthly_only2
+df_entry_split$YEAR <- yearly_only2
+df_groupedentry <- df_entry_split %>% 
+  group_by(station_name,route_or_line,YEAR) %>% 
+  summarise(Total_entries = sum(gated_entries),.groups='drop')
+head(df_groupedentry)  
+
+write.csv(df_groupedentry,"df_gatedentry_floruish.csv", row.names = FALSE)
+```
+
+#Sources
+1. https://datatofish.com/export-dataframe-to-csv-in-r/
+2. https://data.boston.gov/dataset/crime-incident-reports-august-2015-to-date-source-new-system
+3. https://www.google.com/covid19/mobility/
+
+

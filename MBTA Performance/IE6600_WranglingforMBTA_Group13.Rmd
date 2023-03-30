@@ -1,0 +1,169 @@
+---
+title: "HW 4_IE6600_Sec03_Group13"
+author: "Vincenzo Coppola, Ashish Sharma, Akshay Dwivedi"
+date: "2/15/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "C:/Users/BigV24/Desktop/IE6600/Projects/MBTA Performance/data")
+```
+
+```{r Libraries, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(corrplot)
+library(treemapify)
+library(RColorBrewer)
+library(ggalluvial)
+library(ggfittext)
+library(ggrepel)
+library(scales)
+```
+
+```{r Data, include=FALSE}
+df_satisfaction <- read.csv('MBTA_Service_Customer_Satisfaction.csv', na.strings="")
+df_gatedentry <- read.csv('MBTA_Gated_Station_Entries.csv', na.strings="")
+df_fueleff <- read.csv('Fuel_and_Energy.csv', na.strings="")
+```
+
+```{r Task 2, include=TRUE}
+df_sat_split <- df_satisfaction %>% 
+  separate(ï..survey_date, c('date','time'), sep = " ")
+df_sat_split
+monthly_only <- month(ymd(df_sat_split$date))
+yearly_only <- year(ymd(df_sat_split$date))
+df_satisfaction$MONTH <- monthly_only
+df_satisfaction$YEAR <- yearly_only
+st='%'
+df_grouped <- df_satisfaction %>% 
+  group_by(question_description,YEAR) %>% 
+  summarise(Extremely_dissatisfied = mean(response_1_percent), Very_dissatisfied = mean(response_2_percent), Somewhat_dissatisfied = mean(response_3_percent), Neutral = mean(response_4_percent), Somewhat_satisfied = mean(response_5_percent), Very_satisfied = mean(response_6_percent), Extremely_satisfied= mean(response_7_percent),.groups='drop') %>% pivot_longer(c(Extremely_dissatisfied:Extremely_satisfied),names_to = "responses",values_to = 'percentages')
+
+df_grouped$percentages <- label_percent()(df_grouped$percentages)
+
+
+df_grouped
+write.csv(df_grouped,"df_sat_flourish.csv", row.names = FALSE)
+```
+
+### Output 2
+In the second task, corrplot was used to visualize the correlation between all delay types. By transforming the selected columns of the airline data into a matrix and ordering the matrix corrplot.mixed() could be used to visualize the correlation with two different methods - area circles, and numeric values. The resulting correlation matrix shown in the output is the visualization from relating the delay types to each other with a 0-1 range for numbers and circle size where an increase is increase in correlation.
+
+```{r Task 3, include = TRUE}
+colnames(df_gatedentry)
+df_entry_split <- df_gatedentry %>% 
+  separate(ï..service_date, c('date','time'), sep = " ")
+head(df_entry_split)
+monthly_only2 <- month(ymd(df_entry_split$date))
+yearly_only2 <- year(ymd(df_entry_split$date))
+df_entry_split$MONTH <- monthly_only2
+df_entry_split$YEAR <- yearly_only2
+df_groupedentry <- df_entry_split %>% 
+  group_by(station_name,route_or_line,YEAR) %>% 
+  summarise(Total_entries = sum(gated_entries),.groups='drop')
+head(df_groupedentry)
+
+df_groupedentry_race <- df_entry_split %>% 
+  group_by(route_or_line,time_period) %>% 
+  summarise(Total_entries = sum(gated_entries),.groups='drop') %>% 
+  group_by(route_or_line) %>% 
+  mutate(cumulative_entries = cumsum(Total_entries)) %>% 
+  select(-Total_entries) %>% 
+  pivot_wider(names_from = time_period, values_from = cumulative_entries)
+  
+
+head(df_groupedentry_race)
+
+write.csv(df_groupedentry,"df_gatedentry_floruish.csv", row.names = FALSE)
+write.csv(df_groupedentry_race,"df_barchart_floruish.csv", row.names = FALSE)
+
+
+df_dips <- df_entry_split %>% 
+  group_by(route_or_line,time_period) %>% 
+  summarise(Total_entries = sum(gated_entries),.groups='drop') %>% 
+  pivot_wider(names_from = route_or_line, values_fill = Total_entries,)
+(df_dips)
+write.csv(df_dips,"df_dips_floruish.csv", row.names = FALSE)
+
+df_usage_fuel <- df_entry_split %>% 
+  filter(YEAR == '2016'|YEAR == '2017'|YEAR == '2018'|YEAR == '2019') %>% 
+  group_by(YEAR) %>% 
+  summarise(Total_entries = sum(gated_entries),.groups='drop')
+
+df_usage_fuel_combo <- df_fueleff_emission %>% 
+  group_by(ï..Year) %>% 
+  summarise(Total_vol = sum(Volume,na.rm = TRUE),Total_Miles = sum(Miles_Traveled,na.rm = TRUE), avg_eff=mean(Efficiency,na.rm = TRUE),Total_emissions = sum(Emissions,na.rm = TRUE),.groups='drop')
+
+df_withgasonly <- df_usage_fuel_combo %>% 
+  mutate(Emissions_if_gas = 19.37*Total_vol)
+
+df_withgasonly
+
+df_finalfuel1 <- bind_cols(df_withgasonly,df_usage_fuel)
+df_finalfuel <- df_finalfuel1 %>% 
+  mutate(drivers = Total_entries/(4.1*365*2*115)) %>% 
+  mutate(milesbydrivers = (drivers*Total_Miles/4)) %>% 
+  mutate(emissions_if_drivers = milesbydrivers*.9061)
+
+df_finalfuel
+write.csv(df_finalfuel,"df_fueldiff_floruish.csv", row.names = FALSE)
+```
+
+
+```{r Task 3, include = TRUE}
+colnames(df_fueleff)
+df_diesel <- df_fueleff %>% 
+  filter(Fuel_Source=='Diesel'|Fuel_Source=='Bio-Diesel') %>% 
+  mutate(Emissions = 22.46 * Volume)
+
+df_diesel
+
+df_gas <- df_fueleff %>% 
+  filter(Fuel_Source=='Gasoline'|Fuel_Source=='Liquefied Petroleum Gas'|Fuel_Source=='Other Fuel') %>% 
+  mutate(Emissions = 19.37 * Volume)
+
+df_gas
+
+df_electric <- df_fueleff %>% 
+  filter(Fuel_Source=='Electric Propulsion'|Fuel_Source=='Electric Battery') %>% 
+  mutate(Emissions = 0.85 * Volume)
+
+df_electric
+
+df_naturalgas <- df_fueleff %>% 
+  filter(Fuel_Source=='Compressed Natural Gas') %>% 
+  mutate(Emissions = 16.17 * Volume)
+
+df_naturalgas
+
+df_fueleff_emission1 <- bind_rows(df_naturalgas,df_electric)
+df_fueleff_emission2 <- bind_rows(df_fueleff_emission1,df_gas)
+df_fueleff_emission <- bind_rows(df_fueleff_emission2,df_diesel)
+dim(df_fueleff_emission)
+
+df_grouped_efficiency <- df_fueleff_emission %>% 
+  group_by(ï..Year,Fuel_Source) %>% 
+  summarise(Total_vol = sum(Volume,na.rm = TRUE),Total_Miles = sum(Miles_Traveled,na.rm = TRUE), avg_eff=mean(Efficiency,na.rm = TRUE),Total_emissions = sum(Emissions,na.rm = TRUE),.groups='drop')
+
+df_grouped_efficiency
+
+write.csv(df_grouped_efficiency,"df_efficiency_floruish.csv", row.names = FALSE)
+
+df_grouped_noyear <- df_fueleff_emission %>% 
+  group_by(Fuel_Source) %>% 
+  summarise(Total_vol = sum(Volume,na.rm = TRUE),Total_Miles = sum(Miles_Traveled,na.rm = TRUE), avg_eff=mean(Efficiency,na.rm = TRUE),Total_emissions = sum(Emissions,na.rm = TRUE),.groups='drop')
+df_grouped_noyear
+
+
+write.csv(df_grouped_noyear,"df_efficiency_datawrap.csv", row.names = FALSE)
+```
+#Sources
+1. https://datatofish.com/export-dataframe-to-csv-in-r/
+2. https://data.boston.gov/dataset/crime-incident-reports-august-2015-to-date-source-new-system
+3. https://www.google.com/covid19/mobility/
+
+
